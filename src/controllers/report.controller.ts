@@ -58,36 +58,6 @@ const getReport = async (id: number) => {
   return rows[0];
 };
 
-const getCategoryId = async (
-  idCategory: unknown,
-  categoryName: unknown,
-): Promise<number | null> => {
-  if (idCategory !== undefined && idCategory !== null && idCategory !== "") {
-    const id = Number(idCategory);
-
-    if (!validId(id)) return null;
-
-    const [rows] = await db.execute<RowDataPacket[]>(
-      "SELECT id_category FROM categories WHERE id_category = ?",
-      [id],
-    );
-
-    return rows.length ? id : null;
-  }
-
-  if (typeof categoryName !== "string" || !categoryName.trim()) {
-    return null;
-  }
-
-  const [rows] = await db.execute<RowDataPacket[]>(
-    "SELECT id_category FROM categories WHERE nama_category = ?",
-    [categoryName.trim()],
-  );
-
-  const category = rows[0];
-  return category ? Number(category.id_category) : null;
-};
-
 const uploadImage = (file: UploadedFile) =>
   new Promise<{ url: string; id: string }>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -188,12 +158,12 @@ export const createReport = async (req: Request, res: Response) => {
       });
     }
 
-    const categoryId = await getCategoryId(
-      body.id_category,
-      body.nama_category,
+    const [categories] = await db.execute<RowDataPacket[]>(
+      "SELECT id_category FROM categories WHERE id_category = ?",
+      [Number(body.id_category)],
     );
 
-    if (categoryId === null) {
+    if (!Number.isInteger(Number(body.id_category)) || !categories.length) {
       return res.status(400).json({
         message: "Kategori tidak ditemukan atau tidak valid.",
       });
@@ -214,7 +184,7 @@ export const createReport = async (req: Request, res: Response) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
-        categoryId,
+        Number(body.id_category),
         body.judul.trim(),
         body.deskripsi.trim(),
         body.jenis_laporan,
@@ -251,6 +221,7 @@ export const updateReport = async (req: Request, res: Response) => {
     }
 
     if (
+      !body.id_category ||
       !body.judul?.trim() ||
       !body.deskripsi?.trim() ||
       !body.jenis_laporan ||
@@ -278,17 +249,6 @@ export const updateReport = async (req: Request, res: Response) => {
       });
     }
 
-    const categoryId = await getCategoryId(
-      body.id_category,
-      body.nama_category,
-    );
-
-    if (categoryId === null) {
-      return res.status(400).json({
-        message: "Kategori tidak ditemukan atau tidak valid.",
-      });
-    }
-
     const report = await getReport(id);
 
     if (!report) {
@@ -307,6 +267,17 @@ export const updateReport = async (req: Request, res: Response) => {
       });
     }
 
+    const [categories] = await db.execute<RowDataPacket[]>(
+      "SELECT id_category FROM categories WHERE id_category = ?",
+      [Number(body.id_category)],
+    );
+
+    if (!Number.isInteger(Number(body.id_category)) || !categories.length) {
+      return res.status(400).json({
+        message: "Kategori tidak ditemukan atau tidak valid.",
+      });
+    }
+
     let imageUrl = report.image_url;
     let imagePublicId = report.image_public_id;
 
@@ -322,7 +293,7 @@ export const updateReport = async (req: Request, res: Response) => {
        jenis_laporan=?, lokasi=?, tanggal_kejadian=?,
        image_url=?, image_public_id=? WHERE id_report=?`,
       [
-        categoryId,
+        Number(body.id_category),
         body.judul.trim(),
         body.deskripsi.trim(),
         body.jenis_laporan,
